@@ -37,7 +37,10 @@ struct PreviewView: NSViewRepresentable {
             coordinator.load(base: baseDirectory, style: style)
         }
         coordinator.update(markdown: markdown)
-        if let scrollFraction { coordinator.scroll(to: scrollFraction) }
+        if let scrollFraction, scrollFraction != coordinator.lastScrollFraction {
+            coordinator.lastScrollFraction = scrollFraction
+            coordinator.scroll(to: scrollFraction)
+        }
     }
 
     struct PreviewStyle: Equatable {
@@ -51,6 +54,7 @@ struct PreviewView: NSViewRepresentable {
         var hasLoaded = false
         var loadedBase: URL?
         var loadedStyle: PreviewStyle?
+        var lastScrollFraction: Double?
         private var isReady = false
         private var pendingHTML: String?
         private var renderedHTML: String?
@@ -68,6 +72,7 @@ struct PreviewView: NSViewRepresentable {
             loadedBase = base
             loadedStyle = style
             isReady = false
+            lastScrollFraction = nil  // Re-apply the editor's scroll position to the new page.
             pendingHTML = pendingHTML ?? renderedHTML
             renderedHTML = nil
             let baseURL = base.map { LocalFileSchemeHandler.url(forDirectory: $0) }

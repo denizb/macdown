@@ -60,15 +60,33 @@ struct ContentView: View {
         showOutline && mode != .editor
     }
 
-    var body: some View {
-        HStack(spacing: 0) {
-            if outlineVisible {
-                OutlineView(markdown: document.text) { heading in
-                    outlineTarget = .init(anchor: heading.anchor)
-                }
-                Divider()
+    private var sidebarVisibility: Binding<NavigationSplitViewVisibility> {
+        Binding(
+            get: { outlineVisible ? .all : .detailOnly },
+            set: { visibility in
+                // Collapsing the sidebar by dragging its edge turns the outline off.
+                if mode != .editor { showOutline = visibility != .detailOnly }
             }
-            panes
+        )
+    }
+
+    var body: some View {
+        // A real split view sidebar, so macOS 26+ draws the table of contents with
+        // the system Liquid Glass sidebar material.
+        NavigationSplitView(columnVisibility: sidebarVisibility) {
+            OutlineView(markdown: document.text) { heading in
+                outlineTarget = .init(anchor: heading.anchor)
+            }
+            // Our own toggle also hides the sidebar in Editor Only mode.
+            .toolbar(removing: .sidebarToggle)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
+        } detail: {
+            if #available(macOS 26, *) {
+                // Let the text scroll under the glass toolbar.
+                panes.ignoresSafeArea(.container, edges: .top)
+            } else {
+                panes
+            }
         }
         .frame(minWidth: 480, minHeight: 320)
         .navigationSubtitle(stats)
@@ -139,15 +157,14 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        // One glass capsule for the formatting controls.
         ToolbarItemGroup {
-            ControlGroup {
-                FormatButton("Bold", symbol: "bold", action: #selector(MarkdownTextView.toggleBold(_:)))
-                FormatButton("Italic", symbol: "italic", action: #selector(MarkdownTextView.toggleItalic(_:)))
-                FormatButton("Strikethrough", symbol: "strikethrough", action: #selector(MarkdownTextView.toggleStrikethrough(_:)))
-            } label: {
-                Label("Text Style", systemImage: "textformat")
-            }
-            .disabled(mode == .preview)
+            FormatButton("Bold", symbol: "bold", action: #selector(MarkdownTextView.toggleBold(_:)))
+                .disabled(mode == .preview)
+            FormatButton("Italic", symbol: "italic", action: #selector(MarkdownTextView.toggleItalic(_:)))
+                .disabled(mode == .preview)
+            FormatButton("Strikethrough", symbol: "strikethrough", action: #selector(MarkdownTextView.toggleStrikethrough(_:)))
+                .disabled(mode == .preview)
 
             Menu {
                 FormatButton("Heading 1", symbol: "1.square", action: #selector(MarkdownTextView.makeHeading1(_:)))
@@ -167,6 +184,10 @@ struct ContentView: View {
             .disabled(mode == .preview)
         }
 
+        if #available(macOS 26, *) {
+            ToolbarSpacer(.fixed)
+        }
+
         ToolbarItem {
             Picker("Layout", selection: modeBinding) {
                 ForEach(ViewMode.allCases) { mode in
@@ -177,7 +198,7 @@ struct ContentView: View {
             .help("Choose what the window shows")
         }
 
-        ToolbarItem {
+        ToolbarItem(placement: .navigation) {
             Toggle(isOn: $showOutline) {
                 Label("Table of Contents", systemImage: "list.bullet.rectangle")
             }
@@ -186,6 +207,9 @@ struct ContentView: View {
         }
 
         if let fileURL {
+            if #available(macOS 26, *) {
+                ToolbarSpacer(.fixed)
+            }
             ToolbarItem {
                 ShareLink(item: fileURL)
             }
@@ -281,7 +305,6 @@ struct OutlineView: View {
                 .listStyle(.sidebar)
             }
         }
-        .frame(width: 220)
         .accessibilityLabel("Table of Contents")
     }
 }

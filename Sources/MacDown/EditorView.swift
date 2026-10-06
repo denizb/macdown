@@ -121,8 +121,11 @@ struct EditorView: NSViewRepresentable {
         @objc func boundsDidChange(_ notification: Notification) {
             guard let clipView = notification.object as? NSClipView,
                   let documentHeight = clipView.documentView?.frame.height else { return }
-            let scrollable = documentHeight - clipView.bounds.height
-            onScroll(scrollable > 0 ? min(max(clipView.bounds.minY / scrollable, 0), 1) : 0)
+            // Under the glass toolbar AppKit insets the top by the toolbar's height,
+            // so the scroll range starts below zero.
+            let inset = (clipView.superview as? NSScrollView)?.contentInsets.top ?? 0
+            let scrollable = documentHeight - clipView.bounds.height + inset
+            onScroll(scrollable > 0 ? min(max((clipView.bounds.minY + inset) / scrollable, 0), 1) : 0)
         }
     }
 }

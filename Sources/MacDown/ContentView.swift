@@ -62,13 +62,13 @@ struct ContentView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            panes
             if outlineVisible {
-                Divider()
                 OutlineView(markdown: document.text) { heading in
                     outlineTarget = .init(anchor: heading.anchor)
                 }
+                Divider()
             }
+            panes
         }
         .frame(minWidth: 480, minHeight: 320)
         .navigationSubtitle(stats)

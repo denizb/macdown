@@ -22,6 +22,7 @@ A native macOS Markdown editor: SwiftUI `DocumentGroup` app with a highlighted e
 ## Decisions
 
 - **Minimum macOS is 15** (`Package.swift` and `LSMinimumSystemVersion` in `Info.plist` — keep them in sync). Agreed with the user, needed for `defaultLaunchBehavior`.
+- **Liquid Glass needs the SDK stamp:** SwiftPM writes the deployment target (15.0) as the binary's SDK version, so macOS shows the pre-Tahoe look. `build-app.sh` re-stamps it with `vtool` to the real SDK before signing; check with `vtool -show-build`. Glass-only APIs (`ToolbarSpacer`, extending content under the toolbar) are gated with `#available(macOS 26, *)`.
 - **Launch document:** `DocumentGroup` used to add a blank Untitled window on every launch, even on top of restored windows, so they piled up. Fixed with `.defaultLaunchBehavior(.suppressed)` plus `AppDelegate.applicationDidFinishLaunching`, which opens a new doc only on a default launch (`launchIsDefaultUserInfoKey`) when no documents were restored. `applicationShouldOpenUntitledFile` is never called by SwiftUI here — don't use it. Verified: fresh launch → 1 Untitled; relaunch with restored windows → count unchanged; fresh launch with a file → only that file.
 
 ## Testing the running app (GUI)

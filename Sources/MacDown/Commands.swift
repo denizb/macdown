@@ -5,10 +5,19 @@ struct ViewModeKey: FocusedValueKey {
     typealias Value = Binding<ViewMode>
 }
 
+struct ShowOutlineKey: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
+
 extension FocusedValues {
     var viewMode: Binding<ViewMode>? {
         get { self[ViewModeKey.self] }
         set { self[ViewModeKey.self] = newValue }
+    }
+
+    var showOutline: Binding<Bool>? {
+        get { self[ShowOutlineKey.self] }
+        set { self[ShowOutlineKey.self] = newValue }
     }
 }
 
@@ -50,6 +59,7 @@ struct FormatCommands: Commands {
 /// Menu bar ▸ View ▸ layout choices for the focused document window.
 struct ViewModeCommands: Commands {
     @FocusedBinding(\.viewMode) private var mode
+    @FocusedBinding(\.showOutline) private var showOutline
 
     var body: some Commands {
         CommandGroup(before: .toolbar) {
@@ -61,6 +71,15 @@ struct ViewModeCommands: Commands {
                 .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
             }
             .disabled(mode == nil)
+
+            Divider()
+
+            Toggle("Table of Contents", isOn: Binding(
+                get: { showOutline ?? false },
+                set: { showOutline = $0 }
+            ))
+            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .disabled(showOutline == nil || mode == nil || mode == .editor)
 
             Divider()
         }

@@ -58,6 +58,7 @@ enum SettingsKey {
     static let previewFont = "previewFont"
     static let previewFontSize = "previewFontSize"
     static let defaultViewMode = "defaultViewMode"
+    static let showOutline = "showOutline"
 }
 
 struct SettingsView: View {
@@ -67,6 +68,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.previewFont) private var previewFont: PreviewFont = .system
     @AppStorage(SettingsKey.previewFontSize) private var previewFontSize = 15.0
     @AppStorage(SettingsKey.defaultViewMode) private var defaultViewMode: ViewMode = .preview
+    @AppStorage(SettingsKey.showOutline) private var showOutline = false
 
     var body: some View {
         Form {
@@ -81,6 +83,7 @@ struct SettingsView: View {
                 Picker("Open files in", selection: $defaultViewMode) {
                     ForEach(ViewMode.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
                 }
+                Toggle("Show table of contents", isOn: $showOutline)
             } header: {
                 Text("Documents")
             } footer: {

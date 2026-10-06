@@ -10,6 +10,14 @@ struct PreviewView: NSViewRepresentable {
     var fontSize: Double
     /// 0…1 scroll position to mirror from the editor, or nil to leave it alone.
     var scrollFraction: Double?
+    /// A heading to scroll to, e.g. from the table of contents.
+    var anchorRequest: AnchorRequest?
+
+    /// Each request is unique, so selecting the same heading twice scrolls again.
+    struct AnchorRequest: Equatable {
+        let anchor: String
+        let token = UUID()
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -41,6 +49,10 @@ struct PreviewView: NSViewRepresentable {
             coordinator.lastScrollFraction = scrollFraction
             coordinator.scroll(to: scrollFraction)
         }
+        if let anchorRequest, anchorRequest != coordinator.lastAnchorRequest {
+            coordinator.lastAnchorRequest = anchorRequest
+            coordinator.scroll(toAnchor: anchorRequest.anchor)
+        }
     }
 
     struct PreviewStyle: Equatable {
@@ -55,10 +67,12 @@ struct PreviewView: NSViewRepresentable {
         var loadedBase: URL?
         var loadedStyle: PreviewStyle?
         var lastScrollFraction: Double?
+        var lastAnchorRequest: AnchorRequest?
         private var isReady = false
         private var pendingHTML: String?
         private var renderedHTML: String?
         private var pendingScroll: Double?
+        private var pendingAnchor: String?
         private var lastMarkdown: String?
 
         func update(markdown: String) {
@@ -98,6 +112,15 @@ struct PreviewView: NSViewRepresentable {
                 "window.scrollTo(0, Math.max(0, (document.documentElement.scrollHeight - window.innerHeight) * f))", arguments: ["f": fraction], in: nil, in: .page) { _ in }
         }
 
+        func scroll(toAnchor anchor: String) {
+            guard isReady, let webView else {
+                pendingAnchor = anchor
+                return
+            }
+            webView.callAsyncJavaScript(
+                "document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })", arguments: ["id": anchor], in: nil, in: .page) { _ in }
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isReady = true
             if let html = pendingHTML {
@@ -107,6 +130,10 @@ struct PreviewView: NSViewRepresentable {
             if let fraction = pendingScroll {
                 pendingScroll = nil
                 scroll(to: fraction)
+            }
+            if let anchor = pendingAnchor {
+                pendingAnchor = nil
+                scroll(toAnchor: anchor)
             }
         }
 

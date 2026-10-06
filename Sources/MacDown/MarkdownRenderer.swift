@@ -9,12 +9,77 @@ struct MarkdownRenderer {
         let title: String?
     }
 
+    /// A heading in the rendered document, for the table of contents.
+    struct Heading: Identifiable, Equatable {
+        let level: Int
+        let title: String
+        /// The heading's `id` in the HTML; unique within the document.
+        let anchor: String
+
+        var id: String { anchor }
+    }
+
+    /// Collects headings during rendering (which recurses into quotes and lists).
+    private final class HeadingCollector {
+        var headings: [Heading] = []
+        var slugCounts: [String: Int] = [:]
+
+        /// GitHub-style: repeats of a slug get "-1", "-2", … appended.
+        func add(level: Int, title: String, slug: String) -> String {
+            var anchor = slug
+            if let count = slugCounts[slug] {
+                anchor = "\(slug)-\(count)"
+                slugCounts[slug] = count + 1
+            } else {
+                slugCounts[slug] = 1
+            }
+            headings.append(Heading(level: level, title: title, anchor: anchor))
+            return anchor
+        }
+    }
+
     private var references: [String: LinkReference] = [:]
+    private let collector = HeadingCollector()
 
     static func html(from markdown: String) -> String {
+        render(markdown).html
+    }
+
+    static func headings(in markdown: String) -> [Heading] {
+        render(markdown).headings
+    }
+
+    struct Rendered {
+        let html: String
+        let headings: [Heading]
+    }
+
+    private final class CachedRender {
+        let value: Rendered
+        init(_ value: Rendered) { self.value = value }
+    }
+
+    /// The preview and the table of contents both render the same text after every edit,
+    /// and each open window has its own document, so keep a few recent results.
+    nonisolated(unsafe) private static let cache: NSCache<NSString, CachedRender> = {
+        let cache = NSCache<NSString, CachedRender>()
+        cache.countLimit = 16
+        return cache
+    }()
+
+    static func render(_ markdown: String) -> Rendered {
+        let key = markdown as NSString
+        if let hit = cache.object(forKey: key) { return hit.value }
+        let result = renderUncached(markdown)
+        cache.setObject(CachedRender(result), forKey: key)
+        return result
+    }
+
+    private static func renderUncached(_ markdown: String) -> Rendered {
         var renderer = MarkdownRenderer()
         let lines = renderer.extractReferences(from: normalize(markdown))
-        return renderer.renderBlocks(lines)
+        let html = renderer.renderBlocks(lines)
+        return Rendered(html: html, headings: renderer.collector.headings)
     }
 
     private static func normalize(_ text: String) -> [String] {
@@ -190,8 +255,8 @@ struct MarkdownRenderer {
     }
 
     private func heading(level: Int, text: String) -> String {
-        let slug = Self.slug(text)
-        return "<h\(level) id=\"\(slug)\">\(renderInline(text))</h\(level)>\n"
+        let anchor = collector.add(level: level, title: Self.headingTitle(text), slug: Self.slug(text))
+        return "<h\(level) id=\"\(anchor)\">\(renderInline(text))</h\(level)>\n"
     }
 
     private static func fenceMarker(_ trimmed: String) -> String? {
@@ -753,6 +818,13 @@ struct MarkdownRenderer {
 
     private static func plainText(_ chars: [Character]) -> String {
         String(chars).replacingOccurrences(of: #"[*_`~\[\]]|\]\([^)]*\)"#, with: "", options: .regularExpression)
+    }
+
+    /// Heading text without inline Markdown syntax, for display outside the preview.
+    static func headingTitle(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\]\([^)]*\)"#, with: "]", options: .regularExpression)
+            .replacingOccurrences(of: #"[*`~\[\]]|\\(?=[[:punct:]])"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
     }
 
     static func slug(_ text: String) -> String {

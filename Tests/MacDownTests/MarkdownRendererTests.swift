@@ -11,6 +11,15 @@ import Testing
         #expect(render("#NotAHeading") == "<p>#NotAHeading</p>\n")
     }
 
+    @Test func tableOfContents() {
+        let md = "# Intro\n\n```\n# not a heading\n```\n\n## The **[Setup](http://x.y)**\n\n> ### Quoted\n\n## Intro\n"
+        let result = MarkdownRenderer.render(md)
+        #expect(result.headings.map(\.level) == [1, 2, 3, 2])
+        #expect(result.headings.map(\.title) == ["Intro", "The Setup", "Quoted", "Intro"])
+        #expect(result.headings.map(\.anchor) == ["intro", "the-setup", "quoted", "intro-1"])
+        #expect(result.html.contains("<h2 id=\"intro-1\">Intro</h2>"))
+    }
+
     @Test func emphasis() {
         #expect(render("**bold** and *it* and ~~gone~~") == "<p><strong>bold</strong> and <em>it</em> and <del>gone</del></p>\n")
         #expect(render("*a **b** c*") == "<p><em>a <strong>b</strong> c</em></p>\n")

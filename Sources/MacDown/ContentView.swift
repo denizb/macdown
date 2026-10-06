@@ -38,8 +38,10 @@ struct ContentView: View {
     // Empty until the window first appears, then pinned so a restored window keeps its
     // mode and saving a new document (which sets fileURL) doesn't change it.
     @SceneStorage("viewMode") private var storedMode = ""
+    @SceneStorage("showOutline") private var showOutline = UserDefaults.standard.bool(forKey: SettingsKey.showOutline)
     @SceneStorage("splitFraction") private var splitFraction = 0.5
     @State private var editorScroll = 0.0
+    @State private var outlineTarget: PreviewView.AnchorRequest?
 
     @AppStorage(SettingsKey.editorFont) private var editorFont: EditorFont = .monospaced
     @AppStorage(SettingsKey.editorFontSize) private var editorFontSize = 14.0
@@ -54,7 +56,37 @@ struct ContentView: View {
         Binding(get: { mode }, set: { storedMode = $0.rawValue })
     }
 
+    private var outlineVisible: Bool {
+        showOutline && mode != .editor
+    }
+
     var body: some View {
+        HStack(spacing: 0) {
+            panes
+            if outlineVisible {
+                Divider()
+                OutlineView(markdown: document.text) { heading in
+                    outlineTarget = .init(anchor: heading.anchor)
+                }
+            }
+        }
+        .frame(minWidth: 480, minHeight: 320)
+        .navigationSubtitle(stats)
+        .focusedSceneValue(\.viewMode, modeBinding)
+        .focusedSceneValue(\.showOutline, $showOutline)
+        .toolbar { toolbar }
+        .onAppear {
+            if storedMode.isEmpty { storedMode = mode.rawValue }
+        }
+        .onChange(of: mode) { _, newMode in
+            if newMode == .preview {
+                // Don't leave keyboard focus in the hidden editor.
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
+        }
+    }
+
+    private var panes: some View {
         GeometryReader { proxy in
             let editorWidth = width(of: proxy.size.width)
             // The editor stays in the hierarchy in every mode so its text view (and
@@ -75,22 +107,10 @@ struct ContentView: View {
                         baseDirectory: fileURL?.deletingLastPathComponent(),
                         fontFamily: previewFont,
                         fontSize: previewFontSize,
-                        scrollFraction: mode == .split ? editorScroll : nil
+                        scrollFraction: mode == .split ? editorScroll : nil,
+                        anchorRequest: outlineTarget
                     )
                 }
-            }
-        }
-        .frame(minWidth: 480, minHeight: 320)
-        .navigationSubtitle(stats)
-        .focusedSceneValue(\.viewMode, modeBinding)
-        .toolbar { toolbar }
-        .onAppear {
-            if storedMode.isEmpty { storedMode = mode.rawValue }
-        }
-        .onChange(of: mode) { _, newMode in
-            if newMode == .preview {
-                // Don't leave keyboard focus in the hidden editor.
-                NSApp.keyWindow?.makeFirstResponder(nil)
             }
         }
     }
@@ -157,6 +177,14 @@ struct ContentView: View {
             .help("Choose what the window shows")
         }
 
+        ToolbarItem {
+            Toggle(isOn: $showOutline) {
+                Label("Table of Contents", systemImage: "list.bullet.rectangle")
+            }
+            .disabled(mode == .editor)
+            .help("Show or hide the table of contents")
+        }
+
         if let fileURL {
             ToolbarItem {
                 ShareLink(item: fileURL)
@@ -216,5 +244,44 @@ struct SplitDivider: View {
                     .onTapGesture(count: 2) { fraction = 0.5 }
             }
             .accessibilityHidden(true)
+    }
+}
+
+/// Sidebar listing the document's headings; selecting one scrolls the preview to it.
+struct OutlineView: View {
+    let markdown: String
+    let onSelect: (MarkdownRenderer.Heading) -> Void
+
+    var body: some View {
+        let headings = MarkdownRenderer.headings(in: markdown)
+        let topLevel = headings.map(\.level).min() ?? 1
+        Group {
+            if headings.isEmpty {
+                ContentUnavailableView {
+                    Label("No Headings", systemImage: "list.bullet.rectangle")
+                } description: {
+                    Text("Headings in the document appear here.")
+                }
+            } else {
+                List(headings) { heading in
+                    Button {
+                        onSelect(heading)
+                    } label: {
+                        Text(heading.title.isEmpty ? "Untitled" : heading.title)
+                            .fontWeight(heading.level == topLevel ? .semibold : .regular)
+                            .foregroundStyle(heading.level > topLevel + 1 ? .secondary : .primary)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, CGFloat(heading.level - topLevel) * 12)
+                    .help(heading.title)
+                }
+                .listStyle(.sidebar)
+            }
+        }
+        .frame(width: 220)
+        .accessibilityLabel("Table of Contents")
     }
 }

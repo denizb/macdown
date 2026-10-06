@@ -57,6 +57,7 @@ enum SettingsKey {
     static let editorFontSize = "editorFontSize"
     static let previewFont = "previewFont"
     static let previewFontSize = "previewFontSize"
+    static let defaultViewMode = "defaultViewMode"
 }
 
 struct SettingsView: View {
@@ -65,6 +66,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.editorFontSize) private var editorFontSize = 14.0
     @AppStorage(SettingsKey.previewFont) private var previewFont: PreviewFont = .system
     @AppStorage(SettingsKey.previewFontSize) private var previewFontSize = 15.0
+    @AppStorage(SettingsKey.defaultViewMode) private var defaultViewMode: ViewMode = .preview
 
     var body: some View {
         Form {
@@ -73,6 +75,17 @@ struct SettingsView: View {
                     ForEach(Appearance.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
+            }
+
+            Section {
+                Picker("Open files in", selection: $defaultViewMode) {
+                    ForEach(ViewMode.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                }
+            } header: {
+                Text("Documents")
+            } footer: {
+                Text("Applies to newly opened windows. A new blank document opens in the editor rather than Preview Only.")
+                    .foregroundStyle(.secondary)
             }
 
             Section("Editor") {

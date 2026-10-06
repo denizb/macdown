@@ -21,13 +21,23 @@ enum ViewMode: String, CaseIterable, Identifiable {
         case .preview: "eye"
         }
     }
+
+    /// The mode a newly opened window starts in, from Settings.
+    static func initial(for fileURL: URL?) -> ViewMode {
+        let preferred = UserDefaults.standard.string(forKey: SettingsKey.defaultViewMode)
+            .flatMap(ViewMode.init(rawValue:)) ?? .preview
+        // A blank new document has nothing to preview yet.
+        return fileURL == nil && preferred == .preview ? .editor : preferred
+    }
 }
 
 struct ContentView: View {
     @ObservedObject var document: MarkdownDocument
     var fileURL: URL?
 
-    @SceneStorage("viewMode") private var mode: ViewMode = .split
+    // Empty until the window first appears, then pinned so a restored window keeps its
+    // mode and saving a new document (which sets fileURL) doesn't change it.
+    @SceneStorage("viewMode") private var storedMode = ""
     @SceneStorage("splitFraction") private var splitFraction = 0.5
     @State private var editorScroll = 0.0
 
@@ -35,6 +45,14 @@ struct ContentView: View {
     @AppStorage(SettingsKey.editorFontSize) private var editorFontSize = 14.0
     @AppStorage(SettingsKey.previewFont) private var previewFont: PreviewFont = .system
     @AppStorage(SettingsKey.previewFontSize) private var previewFontSize = 15.0
+
+    private var mode: ViewMode {
+        ViewMode(rawValue: storedMode) ?? .initial(for: fileURL)
+    }
+
+    private var modeBinding: Binding<ViewMode> {
+        Binding(get: { mode }, set: { storedMode = $0.rawValue })
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -64,8 +82,11 @@ struct ContentView: View {
         }
         .frame(minWidth: 480, minHeight: 320)
         .navigationSubtitle(stats)
-        .focusedSceneValue(\.viewMode, $mode)
+        .focusedSceneValue(\.viewMode, modeBinding)
         .toolbar { toolbar }
+        .onAppear {
+            if storedMode.isEmpty { storedMode = mode.rawValue }
+        }
         .onChange(of: mode) { _, newMode in
             if newMode == .preview {
                 // Don't leave keyboard focus in the hidden editor.
@@ -127,7 +148,7 @@ struct ContentView: View {
         }
 
         ToolbarItem {
-            Picker("Layout", selection: $mode) {
+            Picker("Layout", selection: modeBinding) {
                 ForEach(ViewMode.allCases) { mode in
                     Label(mode.title, systemImage: mode.symbol).tag(mode)
                 }
